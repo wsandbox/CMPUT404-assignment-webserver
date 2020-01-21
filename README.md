@@ -26,6 +26,9 @@ examples thus some of the code is Copyright © 2001-2013 Python
 Software Foundation; All Rights Reserved under the PSF license (GPL
 compatible) http://docs.python.org/2/library/socketserver.html
 
+Example code observed at https://stackoverflow.com/questions/39801718/how-to-run-a-http-server-which-serves-a-specific-path 
+John Carter  
+
 Collaboration:
 
 * Daniel Cones

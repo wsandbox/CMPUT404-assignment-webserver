@@ -38,51 +38,59 @@ class MyWebServer(socketserver.BaseRequestHandler):
         not_found_header = bytes("""HTTP/1.1 404 Not Found\r\n""", 'utf-8')
         redirect_header = bytes("""HTTP/1.1 301 Moved Permanently\r\n""", "utf-8")
 
-        attr = self.request.recv(4096).strip().split()
+        data = self.request.recv(4096)#.strip()
+        attr = data.split()
         # pdb.set_trace()
-        self.request_type = (attr[0]).decode("utf-8")
-        self.filepath = (attr[1]).decode("utf-8")
+        host = attr[4].decode('utf-8')
+        # self.request.sendall(bytearray("Host: http://127.0.0.1:8080\r\n", 'utf-8'))
+        # self.request.sendall(bytes("Transfer-encoding: chunked\r\n", "utf-8"))
+        # self.request.sendall(bytes("Accept-encoding: *\r\n", "utf-8"))
+
+        # pdb.set_trace()
+        self.request_type = attr[0].decode("utf-8")
+        self.filepath = attr[1].decode("utf-8")
         if self.filepath[0] == "/":
             self.filepath = self.filepath[1:]
         if self.request_type == "GET":
             try:
                 site = open(self.filepath, 'r')
                 reply = site.read()
+                filetype = self.filepath.split('.')[1]
                 self.request.sendall(ok_header)
-                self.request.sendall(bytes("Content-Type: text/html\r\n", 'utf-8'))
-                self.request.sendall(bytearray(reply +'\r\n', 'utf-8'))
+                content = "text/"+filetype+"; charset=utf-8"
+                # set_content = bytearray("Content-Type: "+content+"\r\n", 'UTF-8')
+                set_content = bytearray("Content-Type: mimetype\r\n", 'UTF-8')
 
+                self.request.sendall(set_content)
+                self.request.sendall(bytearray(reply+'\r\n', 'utf-8'))
             except FileNotFoundError as e:
-                print(e)
+                self.request.sendall(bytes("""404: File Not Found\r\n""", 'utf-8'))
                 self.request.sendall(not_found_header)
             
             except IsADirectoryError as e:
-                print(e)
                 if self.filepath[-1] != "/":
                     new_location = "127.0.0.1:8080/"+self.filepath + "/\r\n"
                     reply = "Location: "+new_location
                     self.request.sendall(redirect_header)
-                    self.request.sendall(bytes(reply, 'utf-8'))
+                    self.request.sendall(bytearray(reply, 'utf-8'))
                     return
                 else:
                     self.request.sendall(not_found_header)
 
 
             except Exception as e:
-                print(e)
-                self.handle_error()
+                self.handle_error(e)
         
-        elif self.request_type in ["PUT", "POST", "DELETE", "HEAD", "PATCH", "OPTIONS"]:
+        elif self.request_type in ["PUT", "POST", "DELETE", "HEAD", "PATCH", "OPTIONS", "TRACE", "CONNECT"]:
             self.request.sendall(bad_method_header)
         
-    def handle_error(self):
+    def handle_error(self, e):
+        print(e,'\n')
         self.request.sendall(bytearray("Other Error Occured", "utf-8"))
-        # print("Error occured")
 
 if __name__ == "__main__":
     #changed localhost to 127.0.0.1 to allow curl to successfully retrieve site
     HOST, PORT = "127.0.0.1", 8080
-
     socketserver.TCPServer.allow_reuse_address = True
     # Create the server, binding to localhost on port 8080
     server = socketserver.TCPServer((HOST, PORT), MyWebServer)
