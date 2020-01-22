@@ -69,8 +69,9 @@ class MyWebServer(socketserver.BaseRequestHandler):
                 self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
                 self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
                 self.request.sendall(not_found_header)
-            elif (self.target[:3] != "www" and self.target[:4] != "deep"):
-                print(self.target, "Not a valid target directory")
+            # check ensures only files in ./www and deeper are served
+            elif self.target[:3] != "www":
+                print(self.target, "Not a valid directory")
                 self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
                 self.request.sendall(not_found_header)
 
@@ -79,11 +80,13 @@ class MyWebServer(socketserver.BaseRequestHandler):
                     print("this")
                     self.target+="/"
                 try:
+                    self.target_filetype = self.target.split('.')[-1]
+                    print(self.target_filetype)
                     site = open(self.target, 'r')
                     reply = site.read()
                     self.request.sendall(ok_header)
                     self.request.sendall(bytearray("Accept: text/html, text/css\r\n", "utf-8"))
-                    self.request.sendall(bytearray("Content-Type: text/html; charset:UTF-8\r\n", "utf-8"))
+                    self.request.sendall(bytearray("Content-Type: text/html; charset: UTF-8\r\n", "utf-8"))
                     self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
                 except FileNotFoundError:
                     print("FNF", self.target)
@@ -97,18 +100,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
                     reply = "Location: http://"+self.host+"/"+self.target +"index.html"
                     print(reply)
                     self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
-                    # self.target_file = self.target+"/index.html"
-                    # print("New target:", self.target_file)
-                    # try:
-                    #     site = open(self.target, 'r')
-                    #     reply = site.read()
-                    #     self.request.sendall(ok_header)
-                    #     self.request.sendall(bytearray("Accept: text/html, text/css\r\n", "utf-8"))
-                    #     self.request.sendall(bytearray("Content-Type: text/html; charset:UTF-8\r\n", "utf-8"))
-                    #     self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
-                    # except:
-                    #     self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
-                    #     self.request.sendall(not_found_header)
+            
         
         elif self.request_type in ["PUT", "POST", "DELETE", "HEAD", "PATCH", "OPTIONS", "TRACE", "CONNECT"]:
             print("405:", self.request_type, "not supported")
@@ -116,7 +108,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
             self.request.sendall(bad_method_header)
         
         else: 
-            print("Something was wrong with the request\n", self.data)
+            print("Something else was wrong with the request\n", self.data)
             self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
             self.request.sendall(not_found_header)
 
