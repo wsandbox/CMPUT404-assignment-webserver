@@ -34,83 +34,96 @@ redirect_header = bytearray("""HTTP/1.1 301 Moved Permanently\r\n""", "utf-8")
     
 
 class MyWebServer(socketserver.BaseRequestHandler):
-
-    def return200(self):
-        self.request.sendall(ok_header)
-        return
-    
-    def return301(self):
-        self.request.sendall(bytearray("301: Permanently Redirected\r\n", "utf-8"))
-        self.request.sendall(redirect_header)
-        return        
-
-    def return405(self):
-        self.request.sendall(bytearray("405: Bad Method\r\n", "utf-8"))
-        self.request.sendall(bad_method_header)
-        return
-
     def setup(self):
         self.data = self.request.recv(1024).strip()
         self.data_split = self.data.split()
         self.host = self.data_split[4].decode('utf-8')
         self.request_type = self.data_split[0].decode("utf-8")
-        self.target = self.data_split[1].decode("utf-8")[1:]
-        print("Host:", self.host)
-        print("Request type:", self.request_type)
-        print("Path:", self.target)
+        self.path = self.data_split[1].decode("utf-8")
+        temp = self.path.split('/')[-1]
+        if len(temp.split("."))==2:
+            self.target_file = temp
+        else:
+            self.target_file = ""
+
+        print("Log: Host:", self.host)
+        print("Log: Request type:", self.request_type)
+        print("Log: Path:", self.path)
+        print("Log: Target file: ", self.target_file)
 
 
     def handle(self):
         if self.request_type == "GET":
-            #verify filepath is either www/ or deep/
-            if self.target == "/":
-                reply = "Cannot access root files"
-                print(reply)
+            #verify filepath is either www/ or deeper
+            if self.path == "/":
+                self.return200()
+                reply = "Welcome to 127.0.0.1"
+                print("Log: Client accessed root folder")
                 self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
-                self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
-                self.request.sendall(not_found_header)
             # check ensures only files in ./www and deeper are served
-            elif self.target[:3] != "www":
-                print(self.target, "Not a valid directory")
-                self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
-                self.request.sendall(not_found_header)
+            elif self.path[:4] != "/www":
+                print("Log:", self.path, "Not a valid path")
+                self.return404()
 
             else:
-                if self.target[-3:] == "www" or self.target[-4:] == "deep":
-                    print("this")
-                    self.target+="/"
+                if self.path[:4] == "/www":
+                    print("Entered ./wwww directory")
+                    self.path += "/"
+                    self.return301()
+                    reply = "Location: http://"+self.host+self.path
+                    print("Log: New Path=",reply)
+                    self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+                    
                 try:
-                    self.target_filetype = self.target.split('.')[-1]
-                    print(self.target_filetype)
-                    site = open(self.target, 'r')
+                    site = open(self.path[1:], 'r')
                     reply = site.read()
-                    self.request.sendall(ok_header)
-                    self.request.sendall(bytearray("Accept: text/html, text/css\r\n", "utf-8"))
+                    # pdb.set_trace()
+                    self.return200()
+                    self.request.sendall(bytearray("Accept: */*\r\n", "utf-8"))
                     self.request.sendall(bytearray("Content-Type: text/html; charset: UTF-8\r\n", "utf-8"))
+                    self.request.sendall(bytearray("Content-Length: "+str(len(reply))+"\r\n", "utf-8"))
+
                     self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
                 except FileNotFoundError:
-                    print("FNF", self.target)
-                    self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
-                    self.request.sendall(not_found_header)
+                    print("Log: FNF", self.path)
+                    self.return404()
             
             #redirect www to www/ to www/index.html, same for deep
                 except IsADirectoryError:
-                    print("IADE", self.target)
-                    self.request.sendall(redirect_header)
-                    reply = "Location: http://"+self.host+"/"+self.target +"index.html"
-                    print(reply)
+                    print("Log: IADE", self.path)
+                    self.return301()
+                    reply = "Location: http://"+self.host+self.path+"index.html"
+                    print("Log: New Path=",reply)
                     self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
             
         
         elif self.request_type in ["PUT", "POST", "DELETE", "HEAD", "PATCH", "OPTIONS", "TRACE", "CONNECT"]:
-            print("405:", self.request_type, "not supported")
-            self.request.sendall(bytearray("405: Bad Method\r\n", "utf-8"))
-            self.request.sendall(bad_method_header)
+            print("Log: 405:", self.request_type, "not supported")
+            self.return405()
         
         else: 
-            print("Something else was wrong with the request\n", self.data)
-            self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
-            self.request.sendall(not_found_header)
+            print("Log: Something else was wrong with the request\n", self.data)
+            self.return404()
+
+    def return200(self):
+        self.request.sendall(ok_header)
+        return
+
+    def return301(self):
+        self.request.sendall(redirect_header)
+        return
+
+    def return404(self):
+        self.request.sendall(not_found_header)
+        self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
+        return
+
+
+    def return405(self):
+        self.request.sendall(bad_method_header)
+        self.request.sendall(bytearray("405: Bad Method\r\n", "utf-8"))
+        return
+
 
 
 if __name__ == "__main__":
