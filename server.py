@@ -1,5 +1,5 @@
 #  coding: utf-8 
-import socketserver, os, pdb, mimetypes
+import socketserver, pdb
 # importing Handlers to manage URL searches
 
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
@@ -27,10 +27,11 @@ import socketserver, os, pdb, mimetypes
 
 # try: curl -v -X GET http://127.0.0.1:8080/
 
-ok_header = bytes("""HTTP/1.1 200 OK\r\n""",'utf-8')
-bad_method_header = bytes("""HTTP/1.1 405 Method Not Allowed\r\n""", 'utf-8')
-not_found_header = bytes("""HTTP/1.1 404 Not Found\r\n""", 'utf-8')
-redirect_header = bytes("""HTTP/1.1 301 Moved Permanently\r\n""", "utf-8")
+ok_header = bytearray("""HTTP/1.1 200 OK\r\n""",'utf-8')
+bad_method_header = bytearray("""HTTP/1.1 405 Method Not Allowed\r\n""", 'utf-8')
+not_found_header = bytearray("""HTTP/1.1 404 Not Found\r\n""", 'utf-8')
+redirect_header = bytearray("""HTTP/1.1 301 Moved Permanently\r\n""", "utf-8")
+    
 
 class MyWebServer(socketserver.BaseRequestHandler):
 
@@ -39,17 +40,12 @@ class MyWebServer(socketserver.BaseRequestHandler):
         return
     
     def return301(self):
-        self.request.sendall(bytes("301: Permanently Redirected\r\n", "utf-8"))
+        self.request.sendall(bytearray("301: Permanently Redirected\r\n", "utf-8"))
         self.request.sendall(redirect_header)
-        return
-
-    def return_404(self):
-        self.request.sendall(bytes("""404: File Not Found\r\n""", 'utf-8'))
-        self.request.sendall(not_found_header)
-        return
+        return        
 
     def return405(self):
-        self.request.sendall(bytes("405: Bad Method\r\n", "utf-8"))
+        self.request.sendall(bytearray("405: Bad Method\r\n", "utf-8"))
         self.request.sendall(bad_method_header)
         return
 
@@ -58,74 +54,72 @@ class MyWebServer(socketserver.BaseRequestHandler):
         self.data_split = self.data.split()
         self.host = self.data_split[4].decode('utf-8')
         self.request_type = self.data_split[0].decode("utf-8")
-        self.target = self.data_split[1].decode("utf-8")
-
+        self.target = self.data_split[1].decode("utf-8")[1:]
         print("Host:", self.host)
         print("Request type:", self.request_type)
         print("Path:", self.target)
 
 
     def handle(self):
-        #verify filepath is either www/ or deep/
-        if self.target == "/":
-            reply = "Cannot access root files"
-            print(reply)
-            self.request.sendall(bytes(reply+"\r\n", "utf-8"))
-            self.request404()
-            return
-        elif (self.target[:4] != "/www" and self.target[:5] != "/deep"):
-            print(self.target)
-            self.return404()
-
-        if len(self.target)>2:
-            try:
-                self.filepath = self.target[1:]
-            except IndexError:
-                print("Cannot access files from root")
-                self.request.sendall(bytes("""404: File Not Found\r\n""", 'utf-8'))
-                self.request.sendall(not_found_header)
-
         if self.request_type == "GET":
-            try:
-                filetype = self.filepath.split('.')[1]
-                self.request.sendall(ok_header)
-                self.request.sendall(bytes("Host: " +self.host +"\r\n", "utf-8"))
-                self.request.sendall(bytes("Accept: */*\r\n", "utf-8"))
-                # self.request.sendall(bytes("Accept-Encoding: gzip, deflate, br\r\n", "utf-8"))
-                # set_content = bytearray("Content-Type: "+content+"\r\n", 'utf-8')
-                set_content = bytearray("Content-Type: text/html\r\n", 'utf-8')
-                        
-                self.request.sendall(set_content)
-                # self.request.sendall(bytes("Connection: keep-alive\r\n", "utf-8"))
-
-                site = open(self.filepath, 'r')
-                reply = site.read()
-                self.request.sendall(bytes(reply+'\r\n', 'utf-8'))
-            except FileNotFoundError as e:
-                print(e)
-                self.request.sendall(bytes("""404: File Not Found\r\n""", 'utf-8'))
+            #verify filepath is either www/ or deep/
+            if self.target == "/":
+                reply = "Cannot access root files"
+                print(reply)
+                self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+                self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
                 self.request.sendall(not_found_header)
-            
-            except IsADirectoryError as e:
-                print(e)
-                if self.filepath[-1] != "/":
-                    new_location = "127.0.0.1:8080/"+self.filepath + "/\r\n"
-                    reply = "Location: "+new_location
-                    self.request.sendall(redirect_header)
-                    self.request.sendall(bytearray(reply, 'utf-8'))
-                    return
-                else:
-                    self.request.sendall(bytes("404: Page Not Found\r\n", "utf-8"))
+            elif (self.target[:3] != "www" and self.target[:4] != "deep"):
+                print(self.target, "Not a valid target directory")
+                self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
+                self.request.sendall(not_found_header)
+
+            else:
+                if self.target[-3:] == "www" or self.target[-4:] == "deep":
+                    print("this")
+                    self.target+="/"
+                try:
+                    site = open(self.target, 'r')
+                    reply = site.read()
+                    self.request.sendall(ok_header)
+                    self.request.sendall(bytearray("Accept: text/html, text/css\r\n", "utf-8"))
+                    self.request.sendall(bytearray("Content-Type: text/html; charset:UTF-8\r\n", "utf-8"))
+                    self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+                except FileNotFoundError:
+                    print("FNF", self.target)
+                    self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
                     self.request.sendall(not_found_header)
-
-
-            except Exception as e:
-                print(e)
-                self.return404()
+            
+            #redirect www to www/ to www/index.html, same for deep
+                except IsADirectoryError:
+                    print("IADE", self.target)
+                    self.request.sendall(redirect_header)
+                    reply = "Location: http://"+self.host+"/"+self.target +"index.html"
+                    print(reply)
+                    self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+                    # self.target_file = self.target+"/index.html"
+                    # print("New target:", self.target_file)
+                    # try:
+                    #     site = open(self.target, 'r')
+                    #     reply = site.read()
+                    #     self.request.sendall(ok_header)
+                    #     self.request.sendall(bytearray("Accept: text/html, text/css\r\n", "utf-8"))
+                    #     self.request.sendall(bytearray("Content-Type: text/html; charset:UTF-8\r\n", "utf-8"))
+                    #     self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+                    # except:
+                    #     self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
+                    #     self.request.sendall(not_found_header)
         
         elif self.request_type in ["PUT", "POST", "DELETE", "HEAD", "PATCH", "OPTIONS", "TRACE", "CONNECT"]:
-            self.request.sendall(bytes("405: Bad Method\r\n", "utf-8"))
+            print("405:", self.request_type, "not supported")
+            self.request.sendall(bytearray("405: Bad Method\r\n", "utf-8"))
             self.request.sendall(bad_method_header)
+        
+        else: 
+            print("Something was wrong with the request\n", self.data)
+            self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
+            self.request.sendall(not_found_header)
+
 
 if __name__ == "__main__":
     #changed localhost to 127.0.0.1 to allow curl to successfully retrieve site
