@@ -70,17 +70,16 @@ class MyWebServer(socketserver.BaseRequestHandler):
         
         #redirect www to www/ to www/index.html, same for deep
             except IsADirectoryError:
-                if self.path != "/":
+                if self.path[-1] != "/":
                     self.path += "/"
                     self.return301()
                     self.request.sendall(bytearray("Location: http://"+self.host+self.path+"\r\n", "utf-8"))
-                print("Log: IADE: Retrieving /www"+self.path+"index.html")
-                self.return200()
-                # reply = "Location: http://"+self.host+"/www"+self.path+"index.html"
-                site = open("www"+self.path+"index.html", 'r')
-                reply = site.read()
-                # print("Log: New Path=",reply)
-                self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+                else:
+                    print("Log: IADE: Retrieving /www"+self.path+"index.html")
+                    self.return200()
+                    site = open("www"+self.path+"index.html", 'r')
+                    reply = site.read()
+                    self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
             
         
         elif self.request_type in ["PUT", "POST", "DELETE", "HEAD", "PATCH", "OPTIONS", "TRACE", "CONNECT"]:
