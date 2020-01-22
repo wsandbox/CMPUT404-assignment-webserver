@@ -54,47 +54,33 @@ class MyWebServer(socketserver.BaseRequestHandler):
 
     def handle(self):
         if self.request_type == "GET":
-            #verify filepath is either www/ or deeper
-            if self.path == "/":
+            try:
+                site = open("www"+self.path, 'r')
+                reply = site.read()
+                # pdb.set_trace()
                 self.return200()
-                reply = "Welcome to 127.0.0.1"
-                print("Log: Client accessed root folder")
-                self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
-            # check ensures only files in ./www and deeper are served
-            elif self.path[:4] != "/www":
-                print("Log:", self.path, "Not a valid path")
-                self.return404()
+                self.request.sendall(bytearray("Accept: */*\r\n", "utf-8"))
+                self.request.sendall(bytearray("Content-Type: text/html; charset: UTF-8\r\n", "utf-8"))
+                self.request.sendall(bytearray("Content-Length: "+str(len(reply))+"\r\n", "utf-8"))
 
-            else:
-                if self.path[:4] == "/www":
-                    print("Entered ./wwww directory")
+                self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+            except FileNotFoundError:
+                print("Log: FNF /www"+ self.path)
+                self.return404()
+        
+        #redirect www to www/ to www/index.html, same for deep
+            except IsADirectoryError:
+                if self.path != "/":
                     self.path += "/"
                     self.return301()
-                    reply = "Location: http://"+self.host+self.path
-                    print("Log: New Path=",reply)
-                    self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
-                    
-                try:
-                    site = open(self.path[1:], 'r')
-                    reply = site.read()
-                    # pdb.set_trace()
-                    self.return200()
-                    self.request.sendall(bytearray("Accept: */*\r\n", "utf-8"))
-                    self.request.sendall(bytearray("Content-Type: text/html; charset: UTF-8\r\n", "utf-8"))
-                    self.request.sendall(bytearray("Content-Length: "+str(len(reply))+"\r\n", "utf-8"))
-
-                    self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
-                except FileNotFoundError:
-                    print("Log: FNF", self.path)
-                    self.return404()
-            
-            #redirect www to www/ to www/index.html, same for deep
-                except IsADirectoryError:
-                    print("Log: IADE", self.path)
-                    self.return301()
-                    reply = "Location: http://"+self.host+self.path+"index.html"
-                    print("Log: New Path=",reply)
-                    self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+                    self.request.sendall(bytearray("Location: http://"+self.host+self.path+"\r\n", "utf-8"))
+                print("Log: IADE: Retrieving /www"+self.path+"index.html")
+                self.return200()
+                # reply = "Location: http://"+self.host+"/www"+self.path+"index.html"
+                site = open("www"+self.path+"index.html", 'r')
+                reply = site.read()
+                # print("Log: New Path=",reply)
+                self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
             
         
         elif self.request_type in ["PUT", "POST", "DELETE", "HEAD", "PATCH", "OPTIONS", "TRACE", "CONNECT"]:
@@ -118,7 +104,6 @@ class MyWebServer(socketserver.BaseRequestHandler):
         self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
         return
 
-
     def return405(self):
         self.request.sendall(bad_method_header)
         self.request.sendall(bytearray("405: Bad Method\r\n", "utf-8"))
@@ -127,7 +112,6 @@ class MyWebServer(socketserver.BaseRequestHandler):
 
 
 if __name__ == "__main__":
-    #changed localhost to 127.0.0.1 to allow curl to successfully retrieve site
     HOST, PORT = "127.0.0.1", 8080
     socketserver.TCPServer.allow_reuse_address = True
     # Create the server, binding to localhost on port 8080
