@@ -35,21 +35,21 @@ redirect_header = bytearray("""HTTP/1.1 301 Moved Permanently\r\n""", "utf-8")
 
 class MyWebServer(socketserver.BaseRequestHandler):
     def setup(self):
-        self.data = self.request.recv(1024).strip()
-        self.data_split = self.data.split()
-        self.host = self.data_split[4].decode('utf-8')
-        self.request_type = self.data_split[0].decode("utf-8")
-        self.path = self.data_split[1].decode("utf-8")
-        temp = self.path.split('/')[-1]
-        if len(temp.split("."))==2:
-            self.target_file = temp
-        else:
-            self.target_file = ""
+        try:
+            self.data = self.request.recv(1024).strip()
+            self.data_split = self.data.split()
+            self.host = self.data_split[4].decode('utf-8')
+            self.request_type = self.data_split[0].decode("utf-8")
+            self.path = self.data_split[1].decode("utf-8")
+        except IndexError as e:
+            print("IndexError:",e)
+            print(self.data)
+            return
+
 
         print("Log: Host:", self.host)
         print("Log: Request type:", self.request_type)
         print("Log: Path:", self.path)
-        print("Log: Target file: ", self.target_file)
 
 
     def handle(self):
@@ -57,16 +57,22 @@ class MyWebServer(socketserver.BaseRequestHandler):
             try:
                 site = open("www"+self.path, 'r')
                 reply = site.read()
+                self.filesize = len(reply)
+                self.filetype = self.path.split('.')[1]
+                print("Log: Filetype", self.filetype)
                 # pdb.set_trace()
                 self.return200()
                 self.request.sendall(bytearray("Accept: */*\r\n", "utf-8"))
-                self.request.sendall(bytearray("Content-Type: text/html; charset: UTF-8\r\n", "utf-8"))
-                self.request.sendall(bytearray("Content-Length: "+str(len(reply))+"\r\n", "utf-8"))
-
+                self.request.sendall(bytearray("Content-Length: "+str(self.filesize)+"\r\n", "utf-8"))
+                print("Log: Content Length: "+str(self.filesize))
+                self.request.sendall(bytearray("Content-Type: text/"+self.filetype+"; charset: UTF-8\r\n", "utf-8"))
+                print("Log: Content Type: text/"+self.filetype)
                 self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+
             except FileNotFoundError:
                 print("Log: FNF /www"+ self.path)
                 self.return404()
+                
         
         #redirect www to www/ to www/index.html, same for deep
             except IsADirectoryError:
@@ -101,7 +107,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
     def return404(self):
         self.request.sendall(not_found_header)
         self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
-        return
+        
 
     def return405(self):
         self.request.sendall(bad_method_header)
