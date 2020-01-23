@@ -1,8 +1,8 @@
 #  coding: utf-8 
-import socketserver, pdb
+import socketserver, pdb, os
 # importing Handlers to manage URL searches
 
-# Copyright 2013 Abram Hindle, Eddie Antonio Santos
+# Copyright 2013 Warren Thomas 
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,13 +23,11 @@ import socketserver, pdb
 #
 # http://docs.python.org/2/library/socketserver.html
 #
-# run: python freetests.py
-
-# try: curl -v -X GET http://127.0.0.1:8080/
+# 
 
 ok_header = bytearray("""HTTP/1.1 200 OK\r\n""",'utf-8')
-bad_method_header = bytearray("""HTTP/1.1 405 Method Not Allowed\r\n""", 'utf-8')
-not_found_header = bytearray("""HTTP/1.1 404 Not Found\r\n""", 'utf-8')
+bad_method_header = bytearray("""HTTP/1.1 405 Method Not Allowed\r\n\r\n""", 'utf-8')
+not_found_header = bytes("""HTTP/1.1 404 Not Found\r\n""", 'utf-8')
 redirect_header = bytearray("""HTTP/1.1 301 Moved Permanently\r\n""", "utf-8")
     
 
@@ -38,14 +36,12 @@ class MyWebServer(socketserver.BaseRequestHandler):
         try:
             self.data = self.request.recv(1024).strip()
             self.data_split = self.data.split()
-            self.host = self.data_split[4].decode('utf-8')
+            self.host = "127.0.0.1:8080"
             self.request_type = self.data_split[0].decode("utf-8")
             self.path = self.data_split[1].decode("utf-8")
         except IndexError as e:
             print("IndexError:",e)
-            print(self.data)
             return
-
 
         print("Log: Host:", self.host)
         print("Log: Request type:", self.request_type)
@@ -55,62 +51,81 @@ class MyWebServer(socketserver.BaseRequestHandler):
     def handle(self):
         if self.request_type == "GET":
             try:
-                site = open("www"+self.path, 'r')
-                reply = site.read()
-                self.filesize = len(reply)
-                self.filetype = self.path.split('.')[1]
-                print("Log: Filetype", self.filetype)
-                # pdb.set_trace()
-                self.return200()
-                self.request.sendall(bytearray("Accept: */*\r\n", "utf-8"))
-                self.request.sendall(bytearray("Content-Length: "+str(self.filesize)+"\r\n", "utf-8"))
-                print("Log: Content Length: "+str(self.filesize))
-                self.request.sendall(bytearray("Content-Type: text/"+self.filetype+"; charset: UTF-8\r\n", "utf-8"))
-                print("Log: Content Type: text/"+self.filetype)
-                self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+                cwd = os.getcwd() + "/www"
+                temp = self.path
+                cwd = cwd.split('/')
+                for t in temp[1:].split('/'):
+                    if t == "..":
+                        cwd = cwd[:-1]
+                    else:
+                        cwd.append(t)
+                if "www" not in cwd:
+                    print("Log: Files accessed above root directory")
+                    self.return404()
+                else:
+                    site = open("www"+self.path, 'r')
+                    reply = site.read()
+                    self.filesize = len(reply)
+                    self.filetype = self.path.split('.')[1]
+                    # pdb.set_trace()
+                    self.return200()
+                    self.request.sendall(bytearray("Content-Type: text/"+self.filetype+"; charset: UTF-8\r\n", "utf-8"))
+                    print("Log: Content-Type: text/"+self.filetype)
+                    self.request.sendall(bytearray("\r\n"+reply+"\r\n", "utf-8"))
+                    return
 
             except FileNotFoundError:
                 print("Log: FNF /www"+ self.path)
                 self.return404()
+                return
                 
-        
-        #redirect www to www/ to www/index.html, same for deep
             except IsADirectoryError:
                 if self.path[-1] != "/":
                     self.path += "/"
                     self.return301()
-                    self.request.sendall(bytearray("Location: http://"+self.host+self.path+"\r\n", "utf-8"))
+                    print("Log: Redirecting: http://"+self.host+self.path)
+                    self.request.sendall(bytearray("Location: http://"+self.host+self.path+"\r\n\r\n", "utf-8"))
+                    return
                 else:
                     print("Log: IADE: Retrieving /www"+self.path+"index.html")
                     self.return200()
                     site = open("www"+self.path+"index.html", 'r')
                     reply = site.read()
-                    self.request.sendall(bytearray(reply+"\r\n", "utf-8"))
+                    self.request.sendall(bytearray("Content-Type: text/html; charset: UTF-8\r\n", "utf-8"))
+                    self.request.sendall(bytearray("\r\n"+reply+"\r\n", "utf-8"))
+                    return
             
         
         elif self.request_type in ["PUT", "POST", "DELETE", "HEAD", "PATCH", "OPTIONS", "TRACE", "CONNECT"]:
             print("Log: 405:", self.request_type, "not supported")
             self.return405()
+            return
         
         else: 
             print("Log: Something else was wrong with the request\n", self.data)
             self.return404()
+            return
 
     def return200(self):
         self.request.sendall(ok_header)
+        print("Log: "+(ok_header).decode())
         return
 
     def return301(self):
         self.request.sendall(redirect_header)
+        print("Log: "+(redirect_header).decode())
         return
 
     def return404(self):
         self.request.sendall(not_found_header)
-        self.request.sendall(bytearray("404: File Not Found\r\n", 'utf-8'))
+        print("Log: "+(not_found_header).decode())
+        self.request.sendall(bytearray("404 Not Found\r\n", 'utf-8'))
+        return
         
 
     def return405(self):
         self.request.sendall(bad_method_header)
+        print("Log: "+(bad_method_header).decode())
         self.request.sendall(bytearray("405: Bad Method\r\n", "utf-8"))
         return
 
